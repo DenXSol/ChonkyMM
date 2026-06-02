@@ -1,3 +1,4 @@
+// CHONKY Market Maker Bot v1.1
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import { config } from "./config";
