@@ -218,7 +218,8 @@ export async function withdrawPosition(
       const removeTx = await dlmmPool.removeLiquidity({
         position: position.publicKey,
         user: wallet.publicKey,
-        binIds: binIdsToRemove,
+        fromBinId: Math.min(...binIdsToRemove),
+        toBinId: Math.max(...binIdsToRemove),
         bps: new BN(10000), // 100%
         shouldClaimAndClose: true,
       });
