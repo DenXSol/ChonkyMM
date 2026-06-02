@@ -1,1 +1,39 @@
+export const config = {
+  // RPC & APIs
+  heliumRpcUrl: process.env.HELIUS_RPC_URL!,
+  birdeyeApiKey: process.env.BIRDEYE_API_KEY!,
 
+  // Wallet
+  botWalletPrivateKey: process.env.BOT_WALLET_PRIVATE_KEY!,
+
+  // Token & Pool
+  chonkyMint: process.env.CHONKY_MINT || "2MwjFE1zbXyNKw6VjzGWa3BhPtFcs8htuX2xwRAtbonk",
+  poolAddress: process.env.POOL_ADDRESS || "65kgwwvhxxapiajbr2th2lxafqjj7tkxrztewqeexvzf",
+
+  // Position sizing
+  solAmount: parseFloat(process.env.SOL_AMOUNT || "1.5"),
+  chonkyAmount: parseFloat(process.env.CHONKY_AMOUNT || "3000000"),
+
+  // Bin range (percentages)
+  rangeLowerPct: parseFloat(process.env.RANGE_LOWER_PCT || "15"),   // 15% below price
+  rangeUpperPct: parseFloat(process.env.RANGE_UPPER_PCT || "40"),   // 40% above price
+  feeBps: parseInt(process.env.FEE_BPS || "200"),                   // 2% fee tier
+
+  // Risk controls
+  ilThresholdPct: parseFloat(process.env.IL_THRESHOLD_PCT || "5"),         // pause if IL > 5%
+  priceAlertPct: parseFloat(process.env.PRICE_ALERT_PCT || "20"),          // alert if price moves > 20%
+  emergencyWithdrawPct: parseFloat(process.env.EMERGENCY_WITHDRAW_PCT || "30"), // auto-withdraw if price drops > 30%
+  volatilityWindow: parseInt(process.env.VOLATILITY_WINDOW || "10"),       // minutes for vol calculation
+  baseSpreadPct: parseFloat(process.env.BASE_SPREAD_PCT || "2"),           // base spread %
+  volMultiplier: parseFloat(process.env.VOL_MULTIPLIER || "1.5"),          // spread multiplier on high vol
+  rangeScaleEnabled: process.env.RANGE_SCALE_ENABLED !== "false",          // scale range as price moves up
+  rangeScaleFactor: parseFloat(process.env.RANGE_SCALE_FACTOR || "1.2"),   // how much to expand range on pump
+
+  // Bot control
+  botEnabled: process.env.BOT_ENABLED !== "false",
+  rebalanceIntervalMs: parseInt(process.env.REBALANCE_INTERVAL_MS || "900000"), // 15 min default
+
+  // API server (for dashboard)
+  apiPort: parseInt(process.env.API_PORT || "3001"),
+  apiSecret: process.env.API_SECRET || "changeme",
+};
