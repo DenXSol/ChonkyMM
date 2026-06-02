@@ -21,7 +21,7 @@ export async function getChonkyPrice(): Promise<PriceData> {
   });
 
   if (!res.ok) throw new Error(`Birdeye API error: ${res.status}`);
-  const json = await res.json();
+  const json = await res.json() as { data: Record<string, number> };
   const d = json.data;
 
   const priceData: PriceData = {
@@ -33,7 +33,6 @@ export async function getChonkyPrice(): Promise<PriceData> {
     timestamp: Date.now(),
   };
 
-  // Keep rolling price history for volatility calc
   priceHistory.push({ price: priceData.price, timestamp: priceData.timestamp });
   const cutoff = Date.now() - config.volatilityWindow * 60 * 1000;
   while (priceHistory.length > 0 && priceHistory[0].timestamp < cutoff) {
@@ -49,7 +48,6 @@ export function getVolatility(): "LOW" | "MED" | "HIGH" {
   const max = Math.max(...prices);
   const min = Math.min(...prices);
   const swingPct = ((max - min) / min) * 100;
-
   if (swingPct > 10) return "HIGH";
   if (swingPct > 4) return "MED";
   return "LOW";
@@ -72,11 +70,10 @@ export function calculateDynamicRange(
   if (!config.rangeScaleEnabled || priceMovePct <= 0) {
     return { upper: baseUpper, lower: baseLower };
   }
-  // As price pumps up, expand upper range, keep lower tight
   const scaledUpper = baseUpper * Math.pow(config.rangeScaleFactor, priceMovePct / 10);
-  const scaledLower = Math.max(baseLower * 0.9, 10); // floor at 10%
+  const scaledLower = Math.max(baseLower * 0.9, 10);
   return {
-    upper: Math.min(scaledUpper, 100), // cap at 100% upper range
+    upper: Math.min(scaledUpper, 100),
     lower: scaledLower,
   };
 }
