@@ -15,23 +15,27 @@ export const config = {
   chonkyAmount: parseFloat(process.env.CHONKY_AMOUNT || "3000000"),
 
   // Bin range (percentages)
-  rangeLowerPct: parseFloat(process.env.RANGE_LOWER_PCT || "15"),   // 15% below price
-  rangeUpperPct: parseFloat(process.env.RANGE_UPPER_PCT || "40"),   // 40% above price
-  feeBps: parseInt(process.env.FEE_BPS || "200"),                   // 2% fee tier
+  rangeLowerPct: parseFloat(process.env.RANGE_LOWER_PCT || "15"),
+  rangeUpperPct: parseFloat(process.env.RANGE_UPPER_PCT || "40"),
+  feeBps: parseInt(process.env.FEE_BPS || "200"),
 
   // Risk controls
-  ilThresholdPct: parseFloat(process.env.IL_THRESHOLD_PCT || "5"),         // pause if IL > 5%
-  priceAlertPct: parseFloat(process.env.PRICE_ALERT_PCT || "20"),          // alert if price moves > 20%
-  emergencyWithdrawPct: parseFloat(process.env.EMERGENCY_WITHDRAW_PCT || "30"), // auto-withdraw if price drops > 30%
-  volatilityWindow: parseInt(process.env.VOLATILITY_WINDOW || "10"),       // minutes for vol calculation
-  baseSpreadPct: parseFloat(process.env.BASE_SPREAD_PCT || "2"),           // base spread %
-  volMultiplier: parseFloat(process.env.VOL_MULTIPLIER || "1.5"),          // spread multiplier on high vol
-  rangeScaleEnabled: process.env.RANGE_SCALE_ENABLED !== "false",          // scale range as price moves up
-  rangeScaleFactor: parseFloat(process.env.RANGE_SCALE_FACTOR || "1.2"),   // how much to expand range on pump
+  ilThresholdPct: parseFloat(process.env.IL_THRESHOLD_PCT || "5"),
+  priceAlertPct: parseFloat(process.env.PRICE_ALERT_PCT || "20"),
+  emergencyWithdrawPct: parseFloat(process.env.EMERGENCY_WITHDRAW_PCT || "30"),
+  volatilityWindow: parseInt(process.env.VOLATILITY_WINDOW || "10"),
+  baseSpreadPct: parseFloat(process.env.BASE_SPREAD_PCT || "2"),
+  volMultiplier: parseFloat(process.env.VOL_MULTIPLIER || "1.5"),
+  rangeScaleEnabled: process.env.RANGE_SCALE_ENABLED !== "false",
+  rangeScaleFactor: parseFloat(process.env.RANGE_SCALE_FACTOR || "1.2"),
+
+  // Profit sweep
+  treasuryWallet: process.env.TREASURY_WALLET || "",
+  profitSweepPct: parseFloat(process.env.PROFIT_SWEEP_PCT || "10"),
 
   // Bot control
   botEnabled: process.env.BOT_ENABLED !== "false",
-  rebalanceIntervalMs: parseInt(process.env.REBALANCE_INTERVAL_MS || "900000"), // 15 min default
+  rebalanceIntervalMs: parseInt(process.env.REBALANCE_INTERVAL_MS || "900000"),
 
   // API server (for dashboard)
   apiPort: parseInt(process.env.API_PORT || "3001"),
