@@ -183,8 +183,17 @@ async function runBotCycle(connection: Connection, wallet: Keypair) {
 async function main() {
   console.log("🐱 CHONKY Market Maker Bot starting...");
   console.log("RPC URL:", process.env.HELIUS_RPC_URL ? "SET ✅" : "MISSING ❌");
+  console.log("RPC VALUE:", process.env.HELIUS_RPC_URL || "undefined");
 
-  const connection = new Connection(config.heliumRpcUrl, "confirmed");
+  const rpcUrl = process.env.HELIUS_RPC_URL || config.heliumRpcUrl;
+  if (!rpcUrl || !rpcUrl.startsWith("http")) {
+    console.error("❌ HELIUS_RPC_URL is not set or invalid. Value:", rpcUrl);
+    console.log("Waiting 30s before retry...");
+    await new Promise(r => setTimeout(r, 30000));
+    process.exit(1);
+  }
+
+  const connection = new Connection(rpcUrl, "confirmed");
   const wallet = loadWallet();
 
   botState.botWalletAddress = wallet.publicKey.toString();
