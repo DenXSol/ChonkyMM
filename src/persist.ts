@@ -24,7 +24,6 @@ export function loadPersistedSettings() {
     if (fs.existsSync(SETTINGS_FILE)) {
       const raw = fs.readFileSync(SETTINGS_FILE, "utf8");
       const saved: PersistedSettings = JSON.parse(raw);
-      // Override config with persisted values
       if (saved.solAmount !== undefined) config.solAmount = saved.solAmount;
       if (saved.chonkyAmount !== undefined) config.chonkyAmount = saved.chonkyAmount;
       if (saved.rangeLowerPct !== undefined) config.rangeLowerPct = saved.rangeLowerPct;
@@ -37,10 +36,12 @@ export function loadPersistedSettings() {
       if (saved.rangeScaleEnabled !== undefined) config.rangeScaleEnabled = saved.rangeScaleEnabled;
       if (saved.rebalanceIntervalMs !== undefined) config.rebalanceIntervalMs = saved.rebalanceIntervalMs;
       if (saved.profitSweepPct !== undefined) config.profitSweepPct = saved.profitSweepPct;
-      console.log("[Settings] Loaded persisted settings from settings.json");
+      console.log("[Settings] Loaded persisted settings:", JSON.stringify(saved, null, 2));
+    } else {
+      console.log("[Settings] No settings.json found, using env var defaults");
     }
   } catch (err) {
-    console.log("[Settings] No persisted settings found, using env vars");
+    console.error("[Settings] Error loading settings:", err);
   }
 }
 
@@ -61,7 +62,8 @@ export function saveSettings() {
       profitSweepPct: config.profitSweepPct,
     };
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+    console.log("[Settings] Saved to settings.json:", JSON.stringify(settings, null, 2));
   } catch (err) {
-    console.error("[Settings] Failed to persist settings:", err);
+    console.error("[Settings] Failed to save settings:", err);
   }
 }
