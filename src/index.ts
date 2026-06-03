@@ -8,6 +8,7 @@ import { getPositionInfo, withdrawPosition, depositPosition, harvestFees } from 
 import { log, getActivityFeed } from "./logger";
 import { botState } from "./state";
 import { startApiServer } from "./api";
+import { loadPersistedSettings } from "./persist";
 
 // Load wallet from base58 private key
 function loadWallet(): Keypair {
@@ -182,6 +183,7 @@ async function runBotCycle(connection: Connection, wallet: Keypair) {
 
 async function main() {
   console.log("🐱 CHONKY Market Maker Bot starting...");
+  loadPersistedSettings();
   console.log("RPC URL:", process.env.HELIUS_RPC_URL ? "SET ✅" : "MISSING ❌");
   console.log("RPC VALUE:", process.env.HELIUS_RPC_URL || "undefined");
 
