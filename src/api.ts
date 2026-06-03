@@ -91,8 +91,8 @@ app.post("/settings", auth, (req, res) => {
   if (rebalanceIntervalMinutes !== undefined) config.rebalanceIntervalMs = parseFloat(rebalanceIntervalMinutes) * 60 * 1000;
   if (profitSweepPct !== undefined) config.profitSweepPct = parseFloat(profitSweepPct);
 
-  // Persist immediately to disk so settings survive restarts
-  saveSettings();
+  // Persist to Railway env vars so settings survive restarts/redeployments
+  saveSettings().catch(err => console.error("Save failed:", err));
 
   log(`⚙️ Settings saved: SOL=${config.solAmount} CHONKY=${config.chonkyAmount} range=${config.rangeLowerPct}%/${config.rangeUpperPct}%`, "info");
 
