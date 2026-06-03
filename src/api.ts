@@ -17,26 +17,26 @@ function auth(req: express.Request, res: express.Response, next: express.NextFun
   next();
 }
 
+function getCurrentConfig() {
+  return {
+    solAmount: config.solAmount,
+    chonkyAmount: config.chonkyAmount,
+    rangeLowerPct: config.rangeLowerPct,
+    rangeUpperPct: config.rangeUpperPct,
+    ilThresholdPct: config.ilThresholdPct,
+    priceAlertPct: config.priceAlertPct,
+    emergencyWithdrawPct: config.emergencyWithdrawPct,
+    baseSpreadPct: config.baseSpreadPct,
+    volMultiplier: config.volMultiplier,
+    rangeScaleEnabled: config.rangeScaleEnabled,
+    rebalanceIntervalMs: config.rebalanceIntervalMs,
+    profitSweepPct: config.profitSweepPct,
+  };
+}
+
 // GET /status
 app.get("/status", auth, (req, res) => {
-  res.json({
-    ...botState,
-    // Also expose current config so dashboard can show current values
-    currentConfig: {
-      solAmount: config.solAmount,
-      chonkyAmount: config.chonkyAmount,
-      rangeLowerPct: config.rangeLowerPct,
-      rangeUpperPct: config.rangeUpperPct,
-      ilThresholdPct: config.ilThresholdPct,
-      priceAlertPct: config.priceAlertPct,
-      emergencyWithdrawPct: config.emergencyWithdrawPct,
-      baseSpreadPct: config.baseSpreadPct,
-      volMultiplier: config.volMultiplier,
-      rangeScaleEnabled: config.rangeScaleEnabled,
-      rebalanceIntervalMs: config.rebalanceIntervalMs,
-      profitSweepPct: config.profitSweepPct,
-    }
-  });
+  res.json({ ...botState, currentConfig: getCurrentConfig() });
 });
 
 // POST /control
@@ -68,20 +68,14 @@ app.post("/control", auth, (req, res) => {
   res.json({ success: true, status: botState.status });
 });
 
-// POST /settings — update ALL configurable params live
+// POST /settings — update ALL params live and persist immediately
 app.post("/settings", auth, (req, res) => {
   const {
-    // Position sizing
     solAmount, chonkyAmount,
-    // Range
     rangeLowerPct, rangeUpperPct,
-    // Risk
     ilThreshold, priceAlert, emergencyWithdrawPct,
     baseSpread, volMultiplier, rangeScale,
-    // Timing
-    rebalanceIntervalMinutes,
-    // Profit
-    profitSweepPct,
+    rebalanceIntervalMinutes, profitSweepPct,
   } = req.body;
 
   if (solAmount !== undefined) config.solAmount = parseFloat(solAmount);
@@ -97,22 +91,12 @@ app.post("/settings", auth, (req, res) => {
   if (rebalanceIntervalMinutes !== undefined) config.rebalanceIntervalMs = parseFloat(rebalanceIntervalMinutes) * 60 * 1000;
   if (profitSweepPct !== undefined) config.profitSweepPct = parseFloat(profitSweepPct);
 
-  log(`⚙️ Settings updated via dashboard`, "info");
+  // Persist immediately to disk so settings survive restarts
   saveSettings();
-  res.json({ success: true, currentConfig: {
-    solAmount: config.solAmount,
-    chonkyAmount: config.chonkyAmount,
-    rangeLowerPct: config.rangeLowerPct,
-    rangeUpperPct: config.rangeUpperPct,
-    ilThresholdPct: config.ilThresholdPct,
-    priceAlertPct: config.priceAlertPct,
-    emergencyWithdrawPct: config.emergencyWithdrawPct,
-    baseSpreadPct: config.baseSpreadPct,
-    volMultiplier: config.volMultiplier,
-    rangeScaleEnabled: config.rangeScaleEnabled,
-    rebalanceIntervalMs: config.rebalanceIntervalMs,
-    profitSweepPct: config.profitSweepPct,
-  }});
+
+  log(`⚙️ Settings saved: SOL=${config.solAmount} CHONKY=${config.chonkyAmount} range=${config.rangeLowerPct}%/${config.rangeUpperPct}%`, "info");
+
+  res.json({ success: true, currentConfig: getCurrentConfig() });
 });
 
 export function startApiServer() {
