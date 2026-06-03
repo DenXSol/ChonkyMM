@@ -1,11 +1,6 @@
 import {
-  Connection,
-  Keypair,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-  LAMPORTS_PER_SOL,
-  sendAndConfirmTransaction,
+  Connection, Keypair, PublicKey, SystemProgram, Transaction,
+  LAMPORTS_PER_SOL, sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import DLMM, { StrategyType } from "@meteora-ag/dlmm";
@@ -13,105 +8,65 @@ import { config } from "./config";
 import { log } from "./logger";
 
 export interface PositionInfo {
-  hasPosition: boolean;
-  positionAddress?: string;
-  pooledSol: number;
-  pooledChonky: number;
-  positionValueUsd: number;
-  lowerPrice: number;
-  upperPrice: number;
-  activeBins: number;
-  totalBins: number;
-  pendingFeesSol: number;
-  pendingFeesChonky: number;
+  hasPosition: boolean; positionAddress?: string;
+  pooledSol: number; pooledChonky: number; positionValueUsd: number;
+  lowerPrice: number; upperPrice: number; activeBins: number; totalBins: number;
+  pendingFeesSol: number; pendingFeesChonky: number;
 }
-
 export interface SweepResult {
-  swept: boolean;
-  solSwept: number;
-  totalSweptAllTime: number;
+  swept: boolean; solSwept: number; totalSweptAllTime: number;
 }
 
-// Running total of all SOL swept to treasury this session
 let totalSweptSol = 0;
-// Track SOL balance before/after to detect sell fills
 let lastKnownSolBalance = 0;
 
 export async function getDlmmPool(connection: Connection): Promise<DLMM> {
   return await DLMM.create(connection, new PublicKey(config.poolAddress));
 }
 
-// ─── PROFIT SWEEP ────────────────────────────────────────────────────────────
-// Called after every rebalance cycle. Compares current SOL balance to last
-// known balance — if it went UP (sell fill happened), sweeps the configured
-// % of the gain to the treasury wallet.
+// Detect token order — pool may be CHONKY/SOL or SOL/CHONKY
+async function getTokenOrder(dlmmPool: DLMM): Promise<{ xIsSOL: boolean }> {
+  const tokenXMint = dlmmPool.lbPair.tokenXMint.toString();
+  // SOL wrapped mint address
+  const wrappedSOL = "So11111111111111111111111111111111111111112";
+  return { xIsSOL: tokenXMint === wrappedSOL };
+}
 
+// ─── PROFIT SWEEP ─────────────────────────────────────────────────────────────
 export async function sweepProfitToTreasury(
-  connection: Connection,
-  wallet: Keypair,
-  currentSolBalance: number
+  connection: Connection, wallet: Keypair, currentSolBalance: number
 ): Promise<SweepResult> {
-  // Skip if treasury not configured
   if (!config.treasuryWallet || !config.profitSweepPct || config.profitSweepPct <= 0) {
     lastKnownSolBalance = currentSolBalance;
     return { swept: false, solSwept: 0, totalSweptAllTime: totalSweptSol };
   }
-
-  // First run — just record baseline, don't sweep
   if (lastKnownSolBalance === 0) {
     lastKnownSolBalance = currentSolBalance;
     return { swept: false, solSwept: 0, totalSweptAllTime: totalSweptSol };
   }
-
   const solGain = currentSolBalance - lastKnownSolBalance;
-
-  // Only sweep if SOL balance increased (sell fill occurred)
   if (solGain <= 0.001) {
     lastKnownSolBalance = currentSolBalance;
     return { swept: false, solSwept: 0, totalSweptAllTime: totalSweptSol };
   }
-
   const sweepAmount = solGain * (config.profitSweepPct / 100);
-
-  // Keep a minimum SOL buffer in bot wallet for tx fees
   const minBuffer = 0.1;
-  const availableToSweep = currentSolBalance - minBuffer;
-  if (availableToSweep <= sweepAmount) {
-    log(`⚠️ Skipping sweep — SOL balance too low to sweep safely (balance: ${currentSolBalance.toFixed(4)} SOL)`, "info");
+  if (currentSolBalance - minBuffer <= sweepAmount) {
     lastKnownSolBalance = currentSolBalance;
     return { swept: false, solSwept: 0, totalSweptAllTime: totalSweptSol };
   }
-
   try {
     const lamports = Math.floor(sweepAmount * LAMPORTS_PER_SOL);
-    const treasuryPubkey = new PublicKey(config.treasuryWallet);
-
-    const tx = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: wallet.publicKey,
-        toPubkey: treasuryPubkey,
-        lamports,
-      })
-    );
-
-    await sendAndConfirmTransaction(connection, tx, [wallet], {
-      commitment: "confirmed",
-    });
-
+    const tx = new Transaction().add(SystemProgram.transfer({
+      fromPubkey: wallet.publicKey,
+      toPubkey: new PublicKey(config.treasuryWallet),
+      lamports,
+    }));
+    await sendAndConfirmTransaction(connection, tx, [wallet], { commitment: "confirmed" });
     totalSweptSol += sweepAmount;
     lastKnownSolBalance = currentSolBalance - sweepAmount;
-
-    log(
-      `💸 Profit sweep: ${sweepAmount.toFixed(4)} SOL (${config.profitSweepPct}% of +${solGain.toFixed(4)} SOL gain) → treasury`,
-      "harvest",
-      `Total swept all time: ${totalSweptSol.toFixed(4)} SOL`
-    );
-
-    return {
-      swept: true,
-      solSwept: sweepAmount,
-      totalSweptAllTime: totalSweptSol,
-    };
+    log(`💸 Profit sweep: ${sweepAmount.toFixed(4)} SOL → treasury. Total: ${totalSweptSol.toFixed(4)} SOL`, "harvest");
+    return { swept: true, solSwept: sweepAmount, totalSweptAllTime: totalSweptSol };
   } catch (err) {
     log(`❌ Profit sweep failed: ${err}`, "alert");
     lastKnownSolBalance = currentSolBalance;
@@ -119,88 +74,55 @@ export async function sweepProfitToTreasury(
   }
 }
 
-export function getTotalSweptSol(): number {
-  return totalSweptSol;
-}
+export function getTotalSweptSol(): number { return totalSweptSol; }
 
 // ─── POSITION INFO ────────────────────────────────────────────────────────────
-
 export async function getPositionInfo(
-  connection: Connection,
-  wallet: Keypair,
-  currentPrice: number
+  connection: Connection, wallet: Keypair, currentPrice: number
 ): Promise<PositionInfo> {
   try {
     const dlmmPool = await getDlmmPool(connection);
+    const { xIsSOL } = await getTokenOrder(dlmmPool);
     const { userPositions } = await dlmmPool.getPositionsByUserAndLbPair(wallet.publicKey);
 
     if (!userPositions || userPositions.length === 0) {
-      return {
-        hasPosition: false,
-        pooledSol: 0,
-        pooledChonky: 0,
-        positionValueUsd: 0,
-        lowerPrice: 0,
-        upperPrice: 0,
-        activeBins: 0,
-        totalBins: 0,
-        pendingFeesSol: 0,
-        pendingFeesChonky: 0,
-      };
+      return { hasPosition: false, pooledSol: 0, pooledChonky: 0, positionValueUsd: 0, lowerPrice: 0, upperPrice: 0, activeBins: 0, totalBins: 0, pendingFeesSol: 0, pendingFeesChonky: 0 };
     }
 
     const position = userPositions[0];
     const posData = position.positionData;
 
-    const pooledSol = Number(posData.totalXAmount) / 1e9;
-    const pooledChonky = Number(posData.totalYAmount) / 1e6;
-    const pendingFeesSol = Number(posData.feeX) / 1e9;
-    const pendingFeesChonky = Number(posData.feeY) / 1e6;
+    // X and Y amounts depend on token order
+    const xAmount = Number(posData.totalXAmount);
+    const yAmount = Number(posData.totalYAmount);
+    const feeX = Number(posData.feeX);
+    const feeY = Number(posData.feeY);
 
+    const pooledSol = xIsSOL ? xAmount / 1e9 : yAmount / 1e9;
+    const pooledChonky = xIsSOL ? yAmount / 1e6 : xAmount / 1e6;
+    const pendingFeesSol = xIsSOL ? feeX / 1e9 : feeY / 1e9;
+    const pendingFeesChonky = xIsSOL ? feeY / 1e6 : feeX / 1e6;
     const positionValueUsd = pooledSol * 82 + pooledChonky * currentPrice;
 
-    const activeBin = await dlmmPool.getActiveBin();
     const lowerPrice = Number(posData.lowerBinId) * 0.0001;
     const upperPrice = Number(posData.upperBinId) * 0.0001;
 
     return {
       hasPosition: true,
       positionAddress: position.publicKey.toString(),
-      pooledSol,
-      pooledChonky,
-      positionValueUsd,
-      lowerPrice,
-      upperPrice,
-      activeBins: posData.positionBinData?.filter(
-        (b: any) => Number(b.binXAmount) > 0 || Number(b.binYAmount) > 0
-      ).length || 0,
+      pooledSol, pooledChonky, positionValueUsd, lowerPrice, upperPrice,
+      activeBins: posData.positionBinData?.filter((b: any) => Number(b.binXAmount) > 0 || Number(b.binYAmount) > 0).length || 0,
       totalBins: posData.positionBinData?.length || 0,
-      pendingFeesSol,
-      pendingFeesChonky,
+      pendingFeesSol, pendingFeesChonky,
     };
   } catch (err) {
     log(`Error fetching position: ${err}`, "alert");
-    return {
-      hasPosition: false,
-      pooledSol: 0,
-      pooledChonky: 0,
-      positionValueUsd: 0,
-      lowerPrice: 0,
-      upperPrice: 0,
-      activeBins: 0,
-      totalBins: 0,
-      pendingFeesSol: 0,
-      pendingFeesChonky: 0,
-    };
+    return { hasPosition: false, pooledSol: 0, pooledChonky: 0, positionValueUsd: 0, lowerPrice: 0, upperPrice: 0, activeBins: 0, totalBins: 0, pendingFeesSol: 0, pendingFeesChonky: 0 };
   }
 }
 
 // ─── WITHDRAW ─────────────────────────────────────────────────────────────────
-
-export async function withdrawPosition(
-  connection: Connection,
-  wallet: Keypair
-): Promise<boolean> {
+export async function withdrawPosition(connection: Connection, wallet: Keypair): Promise<boolean> {
   try {
     log("Withdrawing position from pool...", "withdraw");
     const dlmmPool = await getDlmmPool(connection);
@@ -214,25 +136,19 @@ export async function withdrawPosition(
     for (const position of userPositions) {
       const binData = position.positionData.positionBinData;
       const binIdsToRemove = binData.map((b: any) => b.binId);
-
       const removeTx = await dlmmPool.removeLiquidity({
         position: position.publicKey,
         user: wallet.publicKey,
         fromBinId: Math.min(...binIdsToRemove),
         toBinId: Math.max(...binIdsToRemove),
-        bps: new BN(10000), // 100%
+        bps: new BN(10000),
         shouldClaimAndClose: true,
       });
-
       const txs = Array.isArray(removeTx) ? removeTx : [removeTx];
       for (const tx of txs) {
-        await sendAndConfirmTransaction(connection, tx, [wallet], {
-          skipPreflight: false,
-          commitment: "confirmed",
-        });
+        await sendAndConfirmTransaction(connection, tx, [wallet], { skipPreflight: false, commitment: "confirmed" });
       }
     }
-
     log("✅ Position withdrawn successfully", "withdraw");
     return true;
   } catch (err) {
@@ -242,48 +158,46 @@ export async function withdrawPosition(
 }
 
 // ─── DEPOSIT ──────────────────────────────────────────────────────────────────
-
 export async function depositPosition(
-  connection: Connection,
-  wallet: Keypair,
-  currentPrice: number,
-  upperPct: number,
-  lowerPct: number,
-  solLamports: bigint,
-  chonkyUnits: bigint
+  connection: Connection, wallet: Keypair, currentPrice: number,
+  upperPct: number, lowerPct: number, solLamports: bigint, chonkyUnits: bigint
 ): Promise<boolean> {
   try {
     log(`Depositing position: range -${lowerPct.toFixed(1)}% / +${upperPct.toFixed(1)}%`, "deposit");
     const dlmmPool = await getDlmmPool(connection);
+    const { xIsSOL } = await getTokenOrder(dlmmPool);
     const activeBin = await dlmmPool.getActiveBin();
     const binStep = dlmmPool.lbPair.binStep;
 
     const binsBelow = Math.floor(Math.log(1 - lowerPct / 100) / Math.log(1 + binStep / 10000));
     const binsAbove = Math.ceil(Math.log(1 + upperPct / 100) / Math.log(1 + binStep / 10000));
-
     const minBinId = activeBin.binId + binsBelow;
     const maxBinId = activeBin.binId + binsAbove;
 
     const newPosition = Keypair.generate();
 
+    // Assign X and Y correctly based on token order
+    const totalXAmount = xIsSOL
+      ? new BN(solLamports.toString())
+      : new BN(chonkyUnits.toString());
+    const totalYAmount = xIsSOL
+      ? new BN(chonkyUnits.toString())
+      : new BN(solLamports.toString());
+
+    log(`Token order: X=${xIsSOL ? "SOL" : "CHONKY"}, Y=${xIsSOL ? "CHONKY" : "SOL"}`, "info");
+    log(`Depositing X=${totalXAmount.toString()} Y=${totalYAmount.toString()}`, "info");
+
     const createTx = await dlmmPool.initializePositionAndAddLiquidityByStrategy({
       positionPubKey: newPosition.publicKey,
       user: wallet.publicKey,
-      totalXAmount: new BN(solLamports.toString()),
-      totalYAmount: new BN(chonkyUnits.toString()),
-      strategy: {
-        maxBinId,
-        minBinId,
-        strategyType: StrategyType.BidAsk,
-      },
+      totalXAmount,
+      totalYAmount,
+      strategy: { maxBinId, minBinId, strategyType: StrategyType.BidAsk },
     });
 
     const txs = Array.isArray(createTx) ? createTx : [createTx];
     for (const tx of txs) {
-      await sendAndConfirmTransaction(connection, tx, [wallet, newPosition], {
-        skipPreflight: false,
-        commitment: "confirmed",
-      });
+      await sendAndConfirmTransaction(connection, tx, [wallet, newPosition], { skipPreflight: false, commitment: "confirmed" });
     }
 
     log(`✅ Position deposited: bins ${minBinId} → ${maxBinId}`, "deposit");
@@ -295,28 +209,17 @@ export async function depositPosition(
 }
 
 // ─── HARVEST FEES ─────────────────────────────────────────────────────────────
-
-export async function harvestFees(
-  connection: Connection,
-  wallet: Keypair
-): Promise<boolean> {
+export async function harvestFees(connection: Connection, wallet: Keypair): Promise<boolean> {
   try {
     const dlmmPool = await getDlmmPool(connection);
     const { userPositions } = await dlmmPool.getPositionsByUserAndLbPair(wallet.publicKey);
     if (!userPositions || userPositions.length === 0) return false;
 
-    const claimTx = await dlmmPool.claimAllRewards({
-      owner: wallet.publicKey,
-      positions: userPositions,
-    });
-
+    const claimTx = await dlmmPool.claimAllRewards({ owner: wallet.publicKey, positions: userPositions });
     const txs = Array.isArray(claimTx) ? claimTx : [claimTx];
     for (const tx of txs) {
-      await sendAndConfirmTransaction(connection, tx, [wallet], {
-        commitment: "confirmed",
-      });
+      await sendAndConfirmTransaction(connection, tx, [wallet], { commitment: "confirmed" });
     }
-
     log("✅ Fees harvested", "harvest");
     return true;
   } catch (err) {
