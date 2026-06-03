@@ -1,8 +1,12 @@
-import * as fs from "fs";
-import * as path from "path";
 import { config } from "./config";
 
-const SETTINGS_FILE = path.join(process.cwd(), "settings.json");
+// Settings are persisted to Railway environment variables via the Railway API
+// This means they survive container restarts and redeployments
+
+const RAILWAY_API = "https://backboard.railway.app/graphql/v2";
+const RAILWAY_TOKEN = process.env.RAILWAY_API_TOKEN || "";
+const RAILWAY_SERVICE_ID = process.env.RAILWAY_SERVICE_ID || "";
+const RAILWAY_ENVIRONMENT_ID = process.env.RAILWAY_ENVIRONMENT_ID || "";
 
 interface PersistedSettings {
   solAmount?: number;
@@ -20,50 +24,75 @@ interface PersistedSettings {
 }
 
 export function loadPersistedSettings() {
+  // Settings are loaded directly from env vars on startup — Railway persists them
+  // Any values set via dashboard get written back to Railway env vars
+  // So on next restart, Railway injects the updated values automatically
+  console.log("[Settings] Loading from env vars:");
+  console.log(`  SOL_AMOUNT=${process.env.SOL_AMOUNT || "default 1.3"}`);
+  console.log(`  RANGE_LOWER_PCT=${process.env.RANGE_LOWER_PCT || "default 20"}`);
+  console.log(`  RANGE_UPPER_PCT=${process.env.RANGE_UPPER_PCT || "default 60"}`);
+  console.log(`  REBALANCE_INTERVAL_MS=${process.env.REBALANCE_INTERVAL_MS || "default 4800000"}`);
+}
+
+async function upsertRailwayVariable(name: string, value: string): Promise<void> {
+  if (!RAILWAY_TOKEN || !RAILWAY_SERVICE_ID || !RAILWAY_ENVIRONMENT_ID) return;
+
   try {
-    if (fs.existsSync(SETTINGS_FILE)) {
-      const raw = fs.readFileSync(SETTINGS_FILE, "utf8");
-      const saved: PersistedSettings = JSON.parse(raw);
-      if (saved.solAmount !== undefined) config.solAmount = saved.solAmount;
-      if (saved.chonkyAmount !== undefined) config.chonkyAmount = saved.chonkyAmount;
-      if (saved.rangeLowerPct !== undefined) config.rangeLowerPct = saved.rangeLowerPct;
-      if (saved.rangeUpperPct !== undefined) config.rangeUpperPct = saved.rangeUpperPct;
-      if (saved.ilThresholdPct !== undefined) config.ilThresholdPct = saved.ilThresholdPct;
-      if (saved.priceAlertPct !== undefined) config.priceAlertPct = saved.priceAlertPct;
-      if (saved.emergencyWithdrawPct !== undefined) config.emergencyWithdrawPct = saved.emergencyWithdrawPct;
-      if (saved.baseSpreadPct !== undefined) config.baseSpreadPct = saved.baseSpreadPct;
-      if (saved.volMultiplier !== undefined) config.volMultiplier = saved.volMultiplier;
-      if (saved.rangeScaleEnabled !== undefined) config.rangeScaleEnabled = saved.rangeScaleEnabled;
-      if (saved.rebalanceIntervalMs !== undefined) config.rebalanceIntervalMs = saved.rebalanceIntervalMs;
-      if (saved.profitSweepPct !== undefined) config.profitSweepPct = saved.profitSweepPct;
-      console.log("[Settings] Loaded persisted settings:", JSON.stringify(saved, null, 2));
-    } else {
-      console.log("[Settings] No settings.json found, using env var defaults");
-    }
+    const query = `
+      mutation variableUpsert($input: VariableUpsertInput!) {
+        variableUpsert(input: $input)
+      }
+    `;
+    await fetch(RAILWAY_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${RAILWAY_TOKEN}`,
+      },
+      body: JSON.stringify({
+        query,
+        variables: {
+          input: {
+            serviceId: RAILWAY_SERVICE_ID,
+            environmentId: RAILWAY_ENVIRONMENT_ID,
+            name,
+            value,
+          }
+        }
+      }),
+    });
   } catch (err) {
-    console.error("[Settings] Error loading settings:", err);
+    console.error(`[Settings] Failed to upsert Railway var ${name}:`, err);
   }
 }
 
-export function saveSettings() {
-  try {
-    const settings: PersistedSettings = {
-      solAmount: config.solAmount,
-      chonkyAmount: config.chonkyAmount,
-      rangeLowerPct: config.rangeLowerPct,
-      rangeUpperPct: config.rangeUpperPct,
-      ilThresholdPct: config.ilThresholdPct,
-      priceAlertPct: config.priceAlertPct,
-      emergencyWithdrawPct: config.emergencyWithdrawPct,
-      baseSpreadPct: config.baseSpreadPct,
-      volMultiplier: config.volMultiplier,
-      rangeScaleEnabled: config.rangeScaleEnabled,
-      rebalanceIntervalMs: config.rebalanceIntervalMs,
-      profitSweepPct: config.profitSweepPct,
-    };
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
-    console.log("[Settings] Saved to settings.json:", JSON.stringify(settings, null, 2));
-  } catch (err) {
-    console.error("[Settings] Failed to save settings:", err);
+export async function saveSettings(): Promise<void> {
+  // Write all current config values back to Railway env vars
+  // so they persist across restarts and redeployments
+  const vars: Record<string, string> = {
+    SOL_AMOUNT: config.solAmount.toString(),
+    CHONKY_AMOUNT: config.chonkyAmount.toString(),
+    RANGE_LOWER_PCT: config.rangeLowerPct.toString(),
+    RANGE_UPPER_PCT: config.rangeUpperPct.toString(),
+    IL_THRESHOLD_PCT: config.ilThresholdPct.toString(),
+    PRICE_ALERT_PCT: config.priceAlertPct.toString(),
+    EMERGENCY_WITHDRAW_PCT: config.emergencyWithdrawPct.toString(),
+    BASE_SPREAD_PCT: config.baseSpreadPct.toString(),
+    VOL_MULTIPLIER: config.volMultiplier.toString(),
+    RANGE_SCALE_ENABLED: config.rangeScaleEnabled.toString(),
+    REBALANCE_INTERVAL_MS: config.rebalanceIntervalMs.toString(),
+    PROFIT_SWEEP_PCT: config.profitSweepPct.toString(),
+  };
+
+  if (RAILWAY_TOKEN && RAILWAY_SERVICE_ID && RAILWAY_ENVIRONMENT_ID) {
+    // Write to Railway API in parallel
+    await Promise.all(
+      Object.entries(vars).map(([name, value]) => upsertRailwayVariable(name, value))
+    );
+    console.log("[Settings] Saved to Railway env vars");
+  } else {
+    // Fallback: log what would be saved (Railway vars not configured)
+    console.log("[Settings] Railway API not configured — settings saved in memory only this session");
+    console.log("[Settings] To enable persistent saves, add RAILWAY_API_TOKEN, RAILWAY_SERVICE_ID, RAILWAY_ENVIRONMENT_ID to Railway vars");
   }
 }
