@@ -8,15 +8,15 @@ export const config = {
 
   // Token & Pool
   chonkyMint: process.env.CHONKY_MINT || "2MwjFE1zbXyNKw6VjzGWa3BhPtFcs8htuX2xwRAtbonk",
-  poolAddress: process.env.POOL_ADDRESS || "65kgwwvhxxapiajbr2th2lxafqjj7tkxrztewqeexvzf",
+  poolAddress: process.env.POOL_ADDRESS || "4W52XECDFco2tSj17R2TawBTqS1Qc3jJTXJyfNKSwJe5",
 
-  // Position sizing
-  solAmount: parseFloat(process.env.SOL_AMOUNT || "1.5"),
+  // Position sizing — update defaults here if you want to change startup values
+  solAmount: parseFloat(process.env.SOL_AMOUNT || "1.3"),
   chonkyAmount: parseFloat(process.env.CHONKY_AMOUNT || "3000000"),
 
-  // Bin range (percentages)
-  rangeLowerPct: parseFloat(process.env.RANGE_LOWER_PCT || "15"),
-  rangeUpperPct: parseFloat(process.env.RANGE_UPPER_PCT || "40"),
+  // Bin range
+  rangeLowerPct: parseFloat(process.env.RANGE_LOWER_PCT || "20"),
+  rangeUpperPct: parseFloat(process.env.RANGE_UPPER_PCT || "60"),
   feeBps: parseInt(process.env.FEE_BPS || "200"),
 
   // Risk controls
@@ -35,9 +35,9 @@ export const config = {
 
   // Bot control
   botEnabled: process.env.BOT_ENABLED !== "false",
-  rebalanceIntervalMs: parseInt(process.env.REBALANCE_INTERVAL_MS || "900000"),
+  rebalanceIntervalMs: parseInt(process.env.REBALANCE_INTERVAL_MS || "4800000"), // 80 min default
 
-  // API server (for dashboard)
+  // API server
   apiPort: parseInt(process.env.API_PORT || "3001"),
   apiSecret: process.env.API_SECRET || "changeme",
 };
