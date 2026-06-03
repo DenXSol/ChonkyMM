@@ -169,10 +169,26 @@ export async function depositPosition(
     const activeBin = await dlmmPool.getActiveBin();
     const binStep = dlmmPool.lbPair.binStep;
 
-    const binsBelow = Math.floor(Math.log(1 - lowerPct / 100) / Math.log(1 + binStep / 10000));
-    const binsAbove = Math.ceil(Math.log(1 + upperPct / 100) / Math.log(1 + binStep / 10000));
-    const minBinId = activeBin.binId + binsBelow;
-    const maxBinId = activeBin.binId + binsAbove;
+    // Calculate bins from percentage range
+    // Meteora requires position width between 1 and 69 bins
+    const rawBinsBelow = Math.floor(Math.log(1 - lowerPct / 100) / Math.log(1 + binStep / 10000));
+    const rawBinsAbove = Math.ceil(Math.log(1 + upperPct / 100) / Math.log(1 + binStep / 10000));
+
+    // Clamp to valid range — max 69 bins total, min 1 bin each side
+    const MAX_BINS = 69;
+    const binsBelow = Math.max(rawBinsBelow, -(MAX_BINS - 1));
+    const binsAbove = Math.min(rawBinsAbove, MAX_BINS - 1);
+
+    // Ensure total width doesnt exceed 69
+    const totalBins = binsAbove - binsBelow;
+    const scale = totalBins > MAX_BINS ? MAX_BINS / totalBins : 1;
+    const finalBinsBelow = Math.floor(binsBelow * scale);
+    const finalBinsAbove = Math.ceil(binsAbove * scale);
+
+    const minBinId = activeBin.binId + finalBinsBelow;
+    const maxBinId = activeBin.binId + finalBinsAbove;
+
+    log(`Bin calculation: step=${binStep} below=${finalBinsBelow} above=${finalBinsAbove} total=${finalBinsAbove - finalBinsBelow} bins`, "info");
 
     const newPosition = Keypair.generate();
 
