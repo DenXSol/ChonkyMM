@@ -182,6 +182,7 @@ async function runBotCycle(connection: Connection, wallet: Keypair) {
 
 async function main() {
   console.log("🐱 CHONKY Market Maker Bot starting...");
+  console.log("RPC URL:", process.env.HELIUS_RPC_URL ? "SET ✅" : "MISSING ❌");
 
   const connection = new Connection(config.heliumRpcUrl, "confirmed");
   const wallet = loadWallet();
