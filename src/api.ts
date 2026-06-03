@@ -3,6 +3,7 @@ import cors from "cors";
 import { config } from "./config";
 import { botState } from "./state";
 import { log } from "./logger";
+import { saveSettings } from "./persist";
 
 const app = express();
 app.use(cors());
@@ -97,6 +98,7 @@ app.post("/settings", auth, (req, res) => {
   if (profitSweepPct !== undefined) config.profitSweepPct = parseFloat(profitSweepPct);
 
   log(`⚙️ Settings updated via dashboard`, "info");
+  saveSettings();
   res.json({ success: true, currentConfig: {
     solAmount: config.solAmount,
     chonkyAmount: config.chonkyAmount,
